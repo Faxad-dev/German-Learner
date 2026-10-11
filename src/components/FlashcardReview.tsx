@@ -35,108 +35,139 @@ export const FlashcardReview: React.FC<FlashcardReviewProps> = ({ cards, onFinis
 
   if (!currentCard) {
     return (
-      <div className="p-8 text-center rounded-xl bg-neutral-900 border border-neutral-800">
-        <Sparkles className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
-        <h3 className="text-xl font-bold text-white mb-2">Queue is All Caught Up!</h3>
-        <p className="text-xs text-neutral-400 mb-6">
-          You have reviewed all due vocabulary items. Check back tomorrow or learn new units to expand your deck!
+      <div className="max-w-xl mx-auto p-8 sm:p-12 text-center rounded-2xl bg-white border border-[#E3E8E3] shadow-sm space-y-4">
+        <div className="w-14 h-14 rounded-full bg-[#E8F3ED] text-[#176B52] flex items-center justify-center mx-auto">
+          <Sparkles className="w-7 h-7" />
+        </div>
+        <h3 className="text-2xl font-bold text-[#17243A] font-serif">Queue is All Caught Up!</h3>
+        <p className="text-xs sm:text-sm text-[#687386] max-w-sm mx-auto leading-relaxed">
+          You have reviewed all scheduled vocabulary items. Continue learning new curriculum units to expand your retention deck.
         </p>
-        <button 
-          onClick={onFinish}
-          className="px-6 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold"
-        >
-          Return to Dashboard
-        </button>
+        <div className="pt-2">
+          <button 
+            onClick={onFinish}
+            className="px-6 py-2.5 rounded-xl bg-[#176B52] hover:bg-[#125742] text-white text-xs font-semibold shadow-sm transition-colors"
+          >
+            Return to Curriculum
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
-      <div className="flex items-center justify-between text-xs font-mono text-neutral-400">
-        <span>Card {currentIndex + 1} of {sessionCards.length}</span>
-        <span>Interval: {currentCard.interval} days</span>
+      {/* Session Progress Header */}
+      <div className="flex items-center justify-between text-xs text-[#687386]">
+        <span className="font-semibold text-[#17243A]">
+          Card {currentIndex + 1} of {sessionCards.length}
+        </span>
+        <div className="flex items-center gap-2">
+          <span>Interval: {currentCard.interval} days</span>
+          <div className="w-20 h-1.5 rounded-full bg-[#E3E8E3] overflow-hidden">
+            <div 
+              className="h-full bg-[#176B52] rounded-full transition-all duration-300"
+              style={{ width: `${((currentIndex + 1) / sessionCards.length) * 100}%` }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Flashcard Body */}
       <div 
         onClick={() => setIsFlipped(!isFlipped)}
-        className="min-h-[280px] p-8 rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-orange-500/50 cursor-pointer transition-all flex flex-col justify-between text-center shadow-xl"
+        className="min-h-[300px] p-8 rounded-2xl bg-white border border-[#E3E8E3] hover:border-[#176B52] cursor-pointer transition-all duration-200 flex flex-col justify-between text-center shadow-[0_4px_16px_rgba(23,36,58,0.04)] group"
       >
         <div className="flex justify-between items-start">
-          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
-            {currentCard.level} • {currentCard.article ? `${currentCard.article.toUpperCase()}` : 'Vocabulary'}
+          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-[#F0F3EF] text-[#687386]">
+            {currentCard.level} · {currentCard.article ? currentCard.article.toUpperCase() : 'Vocabulary'}
           </span>
           <button 
             onClick={(e) => handleSpeak(currentCard.word, e)}
-            className="p-2 rounded-full bg-neutral-800 hover:bg-orange-600 text-neutral-300 hover:text-white transition-colors"
+            className="p-2 rounded-full bg-[#F0F3EF] group-hover:bg-[#E8F3ED] text-[#687386] group-hover:text-[#176B52] transition-colors"
+            title="Listen"
+            aria-label={`Listen to pronunciation of ${currentCard.word}`}
           >
             <Volume2 className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="py-6">
-          <h2 className="text-3xl font-extrabold text-white font-serif mb-2">
+        <div className="py-6 space-y-2">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#17243A] font-serif tracking-tight">
             {currentCard.article ? `${currentCard.article} ` : ''}{currentCard.word}
           </h2>
+          
           {currentCard.plural && (
-            <span className="text-xs text-neutral-400 font-mono">Plural: {currentCard.plural}</span>
+            <div className="text-xs text-[#687386] font-mono">
+              Plural: {currentCard.plural}
+            </div>
           )}
 
           {isFlipped ? (
-            <div className="mt-4 pt-4 border-t border-neutral-800 animate-fadeIn">
-              <p className="text-lg font-bold text-orange-400">{currentCard.meaning}</p>
-              <div className="mt-3 text-xs text-neutral-300 italic">
-                "{currentCard.exampleDe}"
-              </div>
-              <div className="text-[11px] text-neutral-500">
-                {currentCard.exampleEn}
+            <div className="mt-4 pt-4 border-t border-[#ECEFEA] space-y-2 animate-fadeIn">
+              <p className="text-xl font-bold text-[#176B52] font-serif">
+                {currentCard.meaning}
+              </p>
+              <div className="p-3 rounded-xl bg-[#F7F8F5] border border-[#ECEFEA] text-xs">
+                <div className="text-[#17243A] font-semibold italic">"{currentCard.exampleDe}"</div>
+                <div className="text-[#687386] mt-0.5">{currentCard.exampleEn}</div>
               </div>
             </div>
           ) : (
-            <p className="text-xs text-neutral-500 mt-4">Tap to reveal English meaning & sentence</p>
+            <p className="text-xs text-[#8E9BAE] pt-4">
+              Click anywhere on this card to reveal English meaning & example
+            </p>
           )}
         </div>
 
-        <div className="text-[11px] text-neutral-500">
-          {isFlipped ? 'Rate your recall memory below' : 'Click card to flip'}
+        <div className="text-[11px] text-[#8E9BAE]">
+          {isFlipped ? 'Rate your recall memory below' : 'Tap to flip'}
         </div>
       </div>
 
       {/* Rating Buttons */}
       {isFlipped ? (
-        <div className="grid grid-cols-4 gap-2">
-          <button 
-            onClick={() => handleGrade(1)}
-            className="p-3 rounded-lg bg-red-950/40 hover:bg-red-900 border border-red-800 text-xs font-semibold text-red-200 transition-colors"
-          >
-            Forgot (1)
-          </button>
-          <button 
-            onClick={() => handleGrade(3)}
-            className="p-3 rounded-lg bg-yellow-950/40 hover:bg-yellow-900 border border-yellow-800 text-xs font-semibold text-yellow-200 transition-colors"
-          >
-            Hard (3)
-          </button>
-          <button 
-            onClick={() => handleGrade(4)}
-            className="p-3 rounded-lg bg-blue-950/40 hover:bg-blue-900 border border-blue-800 text-xs font-semibold text-blue-200 transition-colors"
-          >
-            Good (4)
-          </button>
-          <button 
-            onClick={() => handleGrade(5)}
-            className="p-3 rounded-lg bg-emerald-950/40 hover:bg-emerald-900 border border-emerald-800 text-xs font-semibold text-emerald-200 transition-colors"
-          >
-            Easy (5)
-          </button>
+        <div className="space-y-2">
+          <span className="text-xs text-[#687386] block text-center font-medium">
+            How well did you remember this word?
+          </span>
+          <div className="grid grid-cols-4 gap-2">
+            <button 
+              onClick={() => handleGrade(1)}
+              className="p-3 rounded-xl bg-[#FEF2F2] hover:bg-[#FEE2E2] border border-[#FECACA] text-xs font-semibold text-[#991B1B] transition-colors text-center"
+            >
+              <span className="block font-bold">Again</span>
+              <span className="text-[10px] text-[#B91C1C]/80 block font-normal">&lt; 10 min</span>
+            </button>
+            <button 
+              onClick={() => handleGrade(3)}
+              className="p-3 rounded-xl bg-[#FFFBEB] hover:bg-[#FEF3C7] border border-[#FDE68A] text-xs font-semibold text-[#92400E] transition-colors text-center"
+            >
+              <span className="block font-bold">Hard</span>
+              <span className="text-[10px] text-[#B45309]/80 block font-normal">1 day</span>
+            </button>
+            <button 
+              onClick={() => handleGrade(4)}
+              className="p-3 rounded-xl bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-xs font-semibold text-[#1D4ED8] transition-colors text-center"
+            >
+              <span className="block font-bold">Good</span>
+              <span className="text-[10px] text-[#2563EB]/80 block font-normal">3 days</span>
+            </button>
+            <button 
+              onClick={() => handleGrade(5)}
+              className="p-3 rounded-xl bg-[#E8F3ED] hover:bg-[#D5EADB] border border-[#C5DDD0] text-xs font-semibold text-[#176B52] transition-colors text-center"
+            >
+              <span className="block font-bold">Easy</span>
+              <span className="text-[10px] text-[#176B52]/80 block font-normal">7 days</span>
+            </button>
+          </div>
         </div>
       ) : (
         <button 
           onClick={() => setIsFlipped(true)}
-          className="w-full py-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold transition-colors"
+          className="w-full py-3.5 rounded-xl bg-[#17243A] hover:bg-[#0F1726] text-white text-xs font-semibold transition-colors shadow-sm"
         >
-          Show Answer
+          Reveal Meaning & Answer
         </button>
       )}
     </div>
