@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "German Learner",
+  "short_name": "German Learner",
+  "description": "German language learning web app with A-Z alphabet, numbers, an interactive grammar sandbox, and a Goethe B1 exam practice simulator.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0909",
+  "theme_color": "#0a0909",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
