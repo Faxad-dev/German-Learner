@@ -1,9 +1,9 @@
-// Speech synthesis helper with German voice selection and speed control
+// Speech synthesis helper with German voice selection, speed control, and error resilience
 class AudioPlayerService {
   private synth: SpeechSynthesis | null = null;
   private germanVoice: SpeechSynthesisVoice | null = null;
   private isLoaded = false;
-  private rate: number = 0.9; // clear, learner-friendly pace
+  private rate: number = 0.9; // learner-friendly default
 
   constructor() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -18,8 +18,8 @@ class AudioPlayerService {
   private initVoices() {
     if (!this.synth) return;
     const voices = this.synth.getVoices();
-    // Prioritize high-quality German voices (Google Deutsch, de-DE, etc.)
-    const deVoice = voices.find(v => v.lang.startsWith('de') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Katja') || v.name.includes('Stefan')))
+    // Prioritize high-quality German voices (Google Deutsch, de-DE, Microsoft Stefan/Katja, Apple Anna/Martin)
+    const deVoice = voices.find(v => v.lang.startsWith('de') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Katja') || v.name.includes('Stefan') || v.name.includes('Anna') || v.name.includes('Martin')))
       || voices.find(v => v.lang === 'de-DE')
       || voices.find(v => v.lang.startsWith('de'));
     
@@ -30,26 +30,44 @@ class AudioPlayerService {
   }
 
   public setRate(rate: number) {
-    this.rate = Math.max(0.5, Math.min(1.5, rate));
+    this.rate = Math.max(0.6, Math.min(1.5, rate));
   }
 
   public getRate(): number {
     return this.rate;
   }
 
-  public speak(text: string, customRate?: number): Promise<void> {
+  public getVoiceName(): string {
+    return this.germanVoice ? this.germanVoice.name : 'System Standard (de-DE)';
+  }
+
+  public hasGermanVoice(): boolean {
+    return this.germanVoice !== null;
+  }
+
+  public speak(text: string, customRate?: number): Promise<boolean> {
     return new Promise((resolve) => {
       if (!this.synth) {
         console.warn('Speech synthesis not supported in this browser.');
-        resolve();
+        resolve(false);
         return;
+      }
+
+      // Resume synthesis if browser paused it
+      if (this.synth.paused) {
+        this.synth.resume();
       }
 
       this.synth.cancel(); // Stop any pending speech
 
-      const cleanText = text.replace(/💡|🔊|⚠️|🎉|❌|—|\*/g, '').trim();
+      // Clean markdown, emojis, asterisks, and punctuation symbols that sound awkward in TTS
+      const cleanText = text
+        .replace(/💡|🔊|⚠️|🎉|❌|✓|—|\*|★/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
       if (!cleanText) {
-        resolve();
+        resolve(true);
         return;
       }
 
@@ -61,13 +79,21 @@ class AudioPlayerService {
       utterance.rate = customRate || this.rate;
       utterance.pitch = 1.0;
 
-      utterance.onend = () => resolve();
+      utterance.onend = () => resolve(true);
       utterance.onerror = (e) => {
-        console.warn('Speech synthesis error:', e);
-        resolve();
+        // 'interrupted' is normal when a user clicks another audio before the first completes
+        if (e.error !== 'interrupted') {
+          console.warn('Speech synthesis event:', e.error);
+        }
+        resolve(false);
       };
 
-      this.synth.speak(utterance);
+      try {
+        this.synth.speak(utterance);
+      } catch (err) {
+        console.warn('Could not trigger speak:', err);
+        resolve(false);
+      }
     });
   }
 

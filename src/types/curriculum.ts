@@ -70,7 +70,7 @@ export interface RealLifeMission {
 export interface Lesson {
   id: string;
   stageId: string;
-  level: 'Pre-A1' | 'A1.1' | 'A1.2' | 'A2.1';
+  level: 'Pre-A1' | 'A1.1' | 'A1.2' | 'A2.1' | 'B1.1';
   order: number;
   title: string;
   subtitle: string;
@@ -86,7 +86,7 @@ export interface Lesson {
 
 export interface Stage {
   id: string;
-  level: 'Pre-A1' | 'A1' | 'A2';
+  level: 'Pre-A1' | 'A1' | 'A2' | 'B1';
   title: string;
   description: string;
   badge: string;

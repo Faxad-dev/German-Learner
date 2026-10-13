@@ -1,20 +1,22 @@
-import React, { useState } from 'react';
-import { Lesson, Exercise } from '../types/curriculum';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Lesson } from '../types/curriculum';
 import { audioService } from '../services/audioService';
 import { progressService } from '../services/progressService';
 import { 
   Volume2, 
   CheckCircle, 
-  XCircle, 
   ArrowRight, 
   Lightbulb, 
   AlertTriangle, 
   BookOpen, 
   MessageSquare, 
-  Award,
-  Sparkles,
-  ChevronLeft,
-  RotateCcw
+  Award, 
+  Sparkles, 
+  ChevronLeft, 
+  RotateCcw,
+  Gauge,
+  CornerDownLeft,
+  X
 } from 'lucide-react';
 
 interface LessonViewerProps {
@@ -27,6 +29,7 @@ type TabType = 'overview' | 'vocabulary' | 'grammar' | 'dialogue' | 'practice' |
 
 export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onComplete }) => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [speechSpeed, setSpeechSpeed] = useState<number>(() => audioService.getRate());
   
   // Exercise practice state
   const [currentExIndex, setCurrentExIndex] = useState(0);
@@ -45,9 +48,15 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
   const [showMissionModel, setShowMissionModel] = useState(false);
 
   // Audio helper
-  const handleSpeak = (text: string, e?: React.MouseEvent) => {
+  const handleSpeak = useCallback((text: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    audioService.speak(text);
+    audioService.speak(text, speechSpeed);
+  }, [speechSpeed]);
+
+  const toggleSpeechSpeed = () => {
+    const next = speechSpeed >= 1.0 ? 0.75 : speechSpeed === 0.75 ? 0.9 : 1.0;
+    setSpeechSpeed(next);
+    audioService.setRate(next);
   };
 
   const currentExercise = lesson.exercises[currentExIndex];
@@ -57,14 +66,24 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
     setUserSelectedOption(idx);
   };
 
-  const handleSubmitAnswer = () => {
-    if (userSelectedOption === null || isAnswerSubmitted) return;
+  const normalizeAnswer = (val: string): string => {
+    return val
+      .trim()
+      .toLowerCase()
+      .replace(/[.,!?;:]/g, '') // strip trailing punctuation
+      .replace(/\s+/g, ' '); // normalize spaces
+  };
+
+  const handleSubmitAnswer = useCallback(() => {
+    if (userSelectedOption === null || isAnswerSubmitted || !currentExercise) return;
     
     let isCorrect = false;
     if (currentExercise.type === 'word_scramble') {
-      const trimmedUser = String(userSelectedOption).trim().toLowerCase();
-      isCorrect = currentExercise.acceptableAnswers?.some(a => a.toLowerCase() === trimmedUser) 
-        || String(currentExercise.correctAnswer).toLowerCase() === trimmedUser;
+      const userNorm = normalizeAnswer(String(userSelectedOption));
+      const targetNorm = normalizeAnswer(String(currentExercise.correctAnswer));
+      const acceptableNorms = (currentExercise.acceptableAnswers || []).map(normalizeAnswer);
+
+      isCorrect = userNorm === targetNorm || acceptableNorms.includes(userNorm);
     } else {
       isCorrect = userSelectedOption === currentExercise.correctAnswer;
     }
@@ -81,7 +100,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
         isCorrect: false,
         text: `Nicht ganz. ${currentExercise.explanation}`
       });
-      // Record into Mistake Notebook
+      // Record into Mistakes Notebook
       progressService.recordMistake(
         lesson.id,
         currentExercise.prompt,
@@ -90,9 +109,9 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
         currentExercise.explanation
       );
     }
-  };
+  }, [currentExercise, isAnswerSubmitted, lesson.id, userSelectedOption]);
 
-  const handleNextExercise = () => {
+  const handleNextExercise = useCallback(() => {
     if (currentExIndex + 1 < lesson.exercises.length) {
       setCurrentExIndex(prev => prev + 1);
       setUserSelectedOption(null);
@@ -101,12 +120,39 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
     } else {
       setPracticeCompleted(true);
     }
-  };
+  }, [currentExIndex, lesson.exercises.length]);
+
+  // Keyboard shortcut listener for Enter in practice tab
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeTab !== 'practice' || practiceCompleted) return;
+      if (e.key === 'Enter') {
+        if (!isAnswerSubmitted && userSelectedOption !== null) {
+          e.preventDefault();
+          handleSubmitAnswer();
+        } else if (isAnswerSubmitted) {
+          e.preventDefault();
+          handleNextExercise();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, isAnswerSubmitted, practiceCompleted, userSelectedOption, handleSubmitAnswer, handleNextExercise]);
 
   const handleFinishLesson = () => {
     const totalScore = Math.round((correctAnswersCount / Math.max(1, lesson.exercises.length)) * 100);
     progressService.completeLesson(lesson.id, totalScore);
     onComplete(totalScore);
+  };
+
+  // Helper for word scramble: remove last added token
+  const handleRemoveLastWord = () => {
+    if (typeof userSelectedOption !== 'string' || isAnswerSubmitted) return;
+    const tokens = userSelectedOption.trim().split(' ');
+    tokens.pop();
+    setUserSelectedOption(tokens.join(' '));
   };
 
   return (
@@ -116,7 +162,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
         <div>
           <button 
             onClick={onBack}
-            className="text-xs font-semibold text-[#176B52] hover:text-[#125742] flex items-center gap-1 mb-2 transition-colors"
+            className="text-xs font-semibold text-[#176B52] hover:text-[#125742] flex items-center gap-1 mb-2 transition-colors focus-visible:ring-2 focus-visible:ring-[#176B52] rounded"
           >
             <ChevronLeft className="w-3.5 h-3.5" /> Back to Curriculum
           </button>
@@ -134,68 +180,94 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
           </p>
         </div>
 
-        {/* Clean Segmented Sub-Tabs */}
-        <div className="flex flex-wrap gap-1 p-1 bg-[#F0F3EF] rounded-xl border border-[#E3E8E3] self-start md:self-auto">
-          <button 
-            onClick={() => setActiveTab('overview')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'overview' 
-                ? 'bg-white text-[#176B52] shadow-sm' 
-                : 'text-[#687386] hover:text-[#17243A]'
-            }`}
+        {/* Top Controls: Speech Pace Toggle & Segmented Sub-Tabs */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start md:self-auto">
+          {/* Speed Toggle Pill */}
+          <button
+            onClick={toggleSpeechSpeed}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#F0F3EF] hover:bg-[#E3E8E3] text-xs font-medium text-[#17243A] transition-colors border border-[#E3E8E3]"
+            title="Speech pace"
+            aria-label={`Speech rate: ${speechSpeed}x. Click to change pace.`}
           >
-            Overview
+            <Gauge className="w-3.5 h-3.5 text-[#687386]" />
+            <span>Pace: {speechSpeed}x</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('vocabulary')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'vocabulary' 
-                ? 'bg-white text-[#176B52] shadow-sm' 
-                : 'text-[#687386] hover:text-[#17243A]'
-            }`}
-          >
-            Vocabulary ({lesson.essentialVocabulary.length})
-          </button>
-          <button 
-            onClick={() => setActiveTab('grammar')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'grammar' 
-                ? 'bg-white text-[#176B52] shadow-sm' 
-                : 'text-[#687386] hover:text-[#17243A]'
-            }`}
-          >
-            Grammar
-          </button>
-          <button 
-            onClick={() => setActiveTab('dialogue')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'dialogue' 
-                ? 'bg-white text-[#176B52] shadow-sm' 
-                : 'text-[#687386] hover:text-[#17243A]'
-            }`}
-          >
-            Dialogue
-          </button>
-          <button 
-            onClick={() => setActiveTab('practice')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'practice' 
-                ? 'bg-white text-[#176B52] shadow-sm' 
-                : 'text-[#687386] hover:text-[#17243A]'
-            }`}
-          >
-            Practice ({lesson.exercises.length})
-          </button>
-          <button 
-            onClick={() => setActiveTab('mission')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'mission' 
-                ? 'bg-white text-[#176B52] shadow-sm' 
-                : 'text-[#687386] hover:text-[#17243A]'
-            }`}
-          >
-            Mission
-          </button>
+
+          {/* Clean Segmented Sub-Tabs */}
+          <div className="flex flex-wrap gap-1 p-1 bg-[#F0F3EF] rounded-xl border border-[#E3E8E3]" role="tablist">
+            <button 
+              role="tab"
+              aria-selected={activeTab === 'overview'}
+              onClick={() => setActiveTab('overview')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                activeTab === 'overview' 
+                  ? 'bg-white text-[#176B52] shadow-sm' 
+                  : 'text-[#687386] hover:text-[#17243A]'
+              }`}
+            >
+              Overview
+            </button>
+            <button 
+              role="tab"
+              aria-selected={activeTab === 'vocabulary'}
+              onClick={() => setActiveTab('vocabulary')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                activeTab === 'vocabulary' 
+                  ? 'bg-white text-[#176B52] shadow-sm' 
+                  : 'text-[#687386] hover:text-[#17243A]'
+              }`}
+            >
+              Vocabulary ({lesson.essentialVocabulary.length})
+            </button>
+            <button 
+              role="tab"
+              aria-selected={activeTab === 'grammar'}
+              onClick={() => setActiveTab('grammar')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                activeTab === 'grammar' 
+                  ? 'bg-white text-[#176B52] shadow-sm' 
+                  : 'text-[#687386] hover:text-[#17243A]'
+              }`}
+            >
+              Grammar
+            </button>
+            <button 
+              role="tab"
+              aria-selected={activeTab === 'dialogue'}
+              onClick={() => setActiveTab('dialogue')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                activeTab === 'dialogue' 
+                  ? 'bg-white text-[#176B52] shadow-sm' 
+                  : 'text-[#687386] hover:text-[#17243A]'
+              }`}
+            >
+              Dialogue
+            </button>
+            <button 
+              role="tab"
+              aria-selected={activeTab === 'practice'}
+              onClick={() => setActiveTab('practice')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                activeTab === 'practice' 
+                  ? 'bg-white text-[#176B52] shadow-sm' 
+                  : 'text-[#687386] hover:text-[#17243A]'
+              }`}
+            >
+              Practice ({lesson.exercises.length})
+            </button>
+            <button 
+              role="tab"
+              aria-selected={activeTab === 'mission'}
+              onClick={() => setActiveTab('mission')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                activeTab === 'mission' 
+                  ? 'bg-white text-[#176B52] shadow-sm' 
+                  : 'text-[#687386] hover:text-[#17243A]'
+              }`}
+            >
+              Mission
+            </button>
+          </div>
         </div>
       </div>
 
@@ -247,7 +319,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
               <div className="w-10 h-10 rounded-full bg-[#E8F3ED] text-[#176B52] flex items-center justify-center mx-auto">
                 <Sparkles className="w-5 h-5" />
               </div>
-              <h4 className="text-base font-bold text-[#17243A]">CEFR {lesson.level} Roadmap</h4>
+              <h4 className="text-base font-bold text-[#17243A]">CEFR {lesson.level} Progression</h4>
               <p className="text-xs text-[#687386] leading-relaxed">
                 Every unit targets active communication: accurate listening, natural speech rhythm, and structured sentence construction.
               </p>
@@ -303,7 +375,10 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
               <div 
                 key={v.id}
                 onClick={() => handleSpeak(v.german + '. ' + v.exampleDe)}
-                className="bg-white border border-[#E3E8E3] hover:border-[#176B52] p-5 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md flex flex-col justify-between group"
+                tabIndex={0}
+                role="button"
+                aria-label={`Vocabulary: ${v.german}. Meaning: ${v.english}. Click to listen.`}
+                className="bg-white border border-[#E3E8E3] hover:border-[#176B52] focus-visible:ring-2 focus-visible:ring-[#176B52] p-5 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md flex flex-col justify-between group outline-none"
               >
                 <div>
                   <div className="flex items-start justify-between">
@@ -325,7 +400,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
 
                     <button 
                       onClick={(e) => handleSpeak(v.german, e)}
-                      className="p-2 rounded-full bg-[#F0F3EF] group-hover:bg-[#E8F3ED] text-[#687386] group-hover:text-[#176B52] transition-colors"
+                      className="p-2 rounded-full bg-[#F0F3EF] group-hover:bg-[#E8F3ED] text-[#687386] group-hover:text-[#176B52] transition-colors focus-visible:ring-2 focus-visible:ring-[#176B52]"
                       title="Listen"
                       aria-label={`Listen to pronunciation of ${v.german}`}
                     >
@@ -376,7 +451,10 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
                 <div 
                   key={idx}
                   onClick={() => handleSpeak(ex.de)}
-                  className="p-4 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] hover:border-[#176B52] cursor-pointer flex items-start justify-between group transition-all duration-200"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Example: ${ex.de}. Translation: ${ex.en}. Click to listen.`}
+                  className="p-4 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] hover:border-[#176B52] focus-visible:ring-2 focus-visible:ring-[#176B52] cursor-pointer flex items-start justify-between group transition-all duration-200 outline-none"
                 >
                   <div>
                     <div className="text-sm font-bold text-[#17243A] group-hover:text-[#176B52] transition-colors">
@@ -435,7 +513,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
             <button 
               onClick={() => {
                 const fullText = lesson.dialogue.lines.map(l => `${l.speaker}: ${l.de}`).join('. ');
-                audioService.speak(fullText);
+                audioService.speak(fullText, speechSpeed);
               }}
               className="px-4 py-2 rounded-lg bg-[#17243A] hover:bg-[#0F1726] text-white text-xs font-semibold flex items-center gap-2 transition-colors self-start sm:self-auto shrink-0 shadow-sm"
             >
@@ -449,7 +527,10 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
               <div 
                 key={idx}
                 onClick={() => handleSpeak(line.de)}
-                className="p-4 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] hover:border-[#176B52] cursor-pointer flex items-start gap-4 transition-colors group"
+                tabIndex={0}
+                role="button"
+                aria-label={`${line.speaker}: ${line.de}. Click to listen.`}
+                className="p-4 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] hover:border-[#176B52] focus-visible:ring-2 focus-visible:ring-[#176B52] cursor-pointer flex items-start gap-4 transition-colors group outline-none"
               >
                 <div className="w-24 shrink-0">
                   <span className="text-xs font-bold text-[#17243A] block">{line.speaker}</span>
@@ -466,7 +547,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
             ))}
           </div>
 
-          {/* Dialogue Comprehension Question (Inline feedback without alert) */}
+          {/* Dialogue Comprehension Question */}
           <div className="p-5 rounded-xl bg-[#F0F3EF] border border-[#E3E8E3] space-y-3">
             <h4 className="text-xs font-bold text-[#176B52] uppercase tracking-wider">
               Dialogue Comprehension Check:
@@ -504,7 +585,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
                 dialogueFeedback.isCorrect 
                   ? 'bg-[#E8F3ED] border border-[#C5DDD0] text-[#176B52]' 
                   : 'bg-[#FEF2F2] border border-[#FEE2E2] text-[#991B1B]'
-              }`}>
+              }`} aria-live="polite">
                 {dialogueFeedback.text}
               </div>
             )}
@@ -544,7 +625,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
                   <div className="mt-3">
                     <button 
                       onClick={() => handleSpeak(currentExercise.audioText!)}
-                      className="px-3.5 py-1.5 rounded-lg bg-[#E8F3ED] hover:bg-[#D5EADB] text-[#176B52] text-xs font-semibold flex items-center gap-2 transition-colors"
+                      className="px-3.5 py-1.5 rounded-lg bg-[#E8F3ED] hover:bg-[#D5EADB] text-[#176B52] text-xs font-semibold flex items-center gap-2 transition-colors focus-visible:ring-2 focus-visible:ring-[#176B52]"
                     >
                       <Volume2 className="w-4 h-4" /> Listen to Audio
                     </button>
@@ -556,28 +637,52 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
               {currentExercise.type === 'word_scramble' ? (
                 <div className="space-y-3">
                   <p className="text-xs text-[#687386]">Click words or type the complete German sentence:</p>
-                  <input 
-                    type="text"
-                    value={typeof userSelectedOption === 'string' ? userSelectedOption : ''}
-                    onChange={(e) => handleSelectOption(e.target.value)}
-                    placeholder="Type German sentence here..."
-                    disabled={isAnswerSubmitted}
-                    className="w-full p-3.5 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] text-[#17243A] text-sm focus:outline-none focus:border-[#176B52] font-mono"
-                  />
-                  <div className="flex flex-wrap gap-2">
+                  
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      value={typeof userSelectedOption === 'string' ? userSelectedOption : ''}
+                      onChange={(e) => handleSelectOption(e.target.value)}
+                      placeholder="Type German sentence here..."
+                      disabled={isAnswerSubmitted}
+                      className="w-full p-3.5 pr-10 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] text-[#17243A] text-sm focus:outline-none focus:border-[#176B52] focus-visible:ring-2 focus-visible:ring-[#176B52] font-mono"
+                    />
+                    {typeof userSelectedOption === 'string' && userSelectedOption.length > 0 && !isAnswerSubmitted && (
+                      <button 
+                        onClick={() => setUserSelectedOption('')}
+                        className="absolute right-3 top-3.5 text-[#8E9BAE] hover:text-[#17243A] p-1"
+                        title="Clear input"
+                        aria-label="Clear input"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-xs text-[#687386]">Available word tiles:</span>
                     {currentExercise.options?.map((w, idx) => (
                       <button 
                         key={idx}
                         onClick={() => {
-                          const cur = typeof userSelectedOption === 'string' ? userSelectedOption : '';
+                          const cur = typeof userSelectedOption === 'string' ? userSelectedOption.trim() : '';
                           handleSelectOption(cur ? `${cur} ${w}` : w);
                         }}
                         disabled={isAnswerSubmitted}
-                        className="px-3 py-1.5 rounded-lg bg-[#F0F3EF] hover:bg-[#E2E8E0] text-[#17243A] text-xs font-medium border border-[#E3E8E3] transition-colors"
+                        className="px-3 py-1.5 rounded-lg bg-[#F0F3EF] hover:bg-[#E2E8E0] text-[#17243A] text-xs font-medium border border-[#E3E8E3] transition-colors disabled:opacity-40"
                       >
                         + {w}
                       </button>
                     ))}
+
+                    {typeof userSelectedOption === 'string' && userSelectedOption.length > 0 && !isAnswerSubmitted && (
+                      <button
+                        onClick={handleRemoveLastWord}
+                        className="px-3 py-1.5 rounded-lg bg-[#FFFFFF] hover:bg-[#F7F8F5] text-[#991B1B] text-xs font-semibold border border-[#FECACA] transition-colors ml-auto"
+                      >
+                        Undo Word ⌫
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -608,30 +713,37 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
                   exerciseFeedback.isCorrect 
                     ? 'bg-[#E8F3ED] border-[#C5DDD0] text-[#176B52]' 
                     : 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]'
-                }`}>
+                }`} aria-live="polite">
                   {exerciseFeedback.text}
                 </div>
               )}
 
               {/* Action Buttons */}
-              <div className="pt-2 flex justify-end gap-3">
-                {!isAnswerSubmitted ? (
-                  <button 
-                    onClick={handleSubmitAnswer}
-                    disabled={userSelectedOption === null}
-                    className="px-6 py-2.5 rounded-xl bg-[#176B52] hover:bg-[#125742] disabled:opacity-40 text-white text-xs font-semibold transition-all shadow-sm"
-                  >
-                    Check Answer
-                  </button>
-                ) : (
-                  <button 
-                    onClick={handleNextExercise}
-                    className="px-6 py-2.5 rounded-xl bg-[#17243A] hover:bg-[#0F1726] text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-sm"
-                  >
-                    <span>{currentExIndex + 1 < lesson.exercises.length ? 'Next Question' : 'Complete Practice'}</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
+              <div className="pt-2 flex items-center justify-between">
+                <span className="text-[11px] text-[#8E9BAE]">
+                  Tip: Press <strong>Enter ↵</strong> on keyboard to check or continue
+                </span>
+
+                <div className="flex gap-3">
+                  {!isAnswerSubmitted ? (
+                    <button 
+                      onClick={handleSubmitAnswer}
+                      disabled={userSelectedOption === null}
+                      className="px-6 py-2.5 rounded-xl bg-[#176B52] hover:bg-[#125742] disabled:opacity-40 text-white text-xs font-semibold transition-all shadow-sm flex items-center gap-1.5"
+                    >
+                      <span>Check Answer</span>
+                      <CornerDownLeft className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleNextExercise}
+                      className="px-6 py-2.5 rounded-xl bg-[#17243A] hover:bg-[#0F1726] text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-sm"
+                    >
+                      <span>{currentExIndex + 1 < lesson.exercises.length ? 'Next Question' : 'Complete Practice'}</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
@@ -706,7 +818,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
               value={missionAnswer}
               onChange={(e) => setMissionAnswer(e.target.value)}
               placeholder="e.g. Hallo, ich möchte einen Kaffee und ein Wasser bitte..."
-              className="w-full p-3.5 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] text-[#17243A] text-sm focus:outline-none focus:border-[#176B52]"
+              className="w-full p-3.5 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] text-[#17243A] text-sm focus:outline-none focus:border-[#176B52] focus-visible:ring-2 focus-visible:ring-[#176B52]"
             />
           </div>
 
@@ -728,7 +840,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({ lesson, onBack, onCo
           </div>
 
           {showMissionModel && (
-            <div className="p-4 rounded-xl bg-[#E8F3ED] border border-[#C5DDD0] space-y-2 animate-fadeIn">
+            <div className="p-4 rounded-xl bg-[#E8F3ED] border border-[#C5DDD0] space-y-2 animate-fadeIn" aria-live="polite">
               <span className="text-xs font-semibold text-[#176B52] uppercase tracking-wider block">
                 Model German Response:
               </span>

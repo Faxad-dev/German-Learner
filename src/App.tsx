@@ -18,8 +18,32 @@ import {
   Menu,
   X,
   Award,
-  ChevronRight
+  ChevronRight,
+  AlertCircle,
+  Check,
+  RefreshCw,
+  Info
 } from 'lucide-react';
+
+interface GenderDrillWord {
+  word: string;
+  article: 'der' | 'die' | 'das';
+  translation: string;
+  ruleExplanation: string;
+}
+
+const GENDER_DRILL_POOL: GenderDrillWord[] = [
+  { word: 'Kaffee', article: 'der', translation: 'coffee', ruleExplanation: 'Masculine. Drink: der Kaffee. In Akkusativ: "Ich trinke einen Kaffee."' },
+  { word: 'Zeitung', article: 'die', translation: 'newspaper', ruleExplanation: 'Feminine. Nouns ending in "-ung" are virtually 100% feminine (die Zeitung, die Rechnung).' },
+  { word: 'Mädchen', article: 'das', translation: 'girl', ruleExplanation: 'Neuter. Diminutive suffix "-chen" is always grammatically neuter (das Mädchen, das Brötchen).' },
+  { word: 'Tisch', article: 'der', translation: 'table', ruleExplanation: 'Masculine. Everyday furniture: der Tisch, den Tisch (Akkusativ).' },
+  { word: 'Freiheit', article: 'die', translation: 'freedom', ruleExplanation: 'Feminine. Nouns ending in "-heit" and "-keit" are always feminine (die Freiheit, die Möglichkeit).' },
+  { word: 'Auto', article: 'das', translation: 'car', ruleExplanation: 'Neuter. Most motor vehicle and transport words: das Auto, das Fahrrad, das Flugzeug.' },
+  { word: 'Universität', article: 'die', translation: 'university', ruleExplanation: 'Feminine. Latinate nouns ending in "-tät" are feminine (die Universität, die Qualität).' },
+  { word: 'Museum', article: 'das', translation: 'museum', ruleExplanation: 'Neuter. Nouns ending in "-um" derived from Latin are neuter (das Museum, das Zentrum).' },
+  { word: 'Schlüssel', article: 'der', translation: 'key', ruleExplanation: 'Masculine. Most agentive nouns and implements ending in "-el": der Schlüssel, der Löffel.' },
+  { word: 'Bäckerei', article: 'die', translation: 'bakery', ruleExplanation: 'Feminine. Establishments ending in "-ei" are feminine (die Bäckerei, die Konditorei).' }
+];
 
 export const App: React.FC = () => {
   const [progress, setProgress] = useState<UserProgressState>(() => {
@@ -34,11 +58,20 @@ export const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'curriculum' | 'lesson' | 'srs' | 'mistakes' | 'simulator'>('curriculum');
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
 
   // Rapid Gender Drill state
+  const [drillIndex, setDrillIndex] = useState(0);
+  const [drillScore, setDrillScore] = useState(0);
+  const [drillAttempts, setDrillAttempts] = useState(0);
   const [genderFeedback, setGenderFeedback] = useState<{ isCorrect: boolean; message: string } | null>(null);
 
-  // B1 Exam Simulator slider state
+  // Mistakes practice inline state
+  const [activeMistakePracticeId, setActiveMistakePracticeId] = useState<string | null>(null);
+  const [mistakeUserAnswer, setMistakeUserAnswer] = useState('');
+  const [mistakeFeedback, setMistakeFeedback] = useState<string | null>(null);
+
+  // Goethe B1 Modular Exam Simulator state (4 independent modules: 0-100 pts)
   const [examScores, setExamScores] = useState({
     lesen: 75,
     hoeren: 70,
@@ -67,31 +100,86 @@ export const App: React.FC = () => {
     audioService.speak(text);
   };
 
+  const handleScoreChange = (module: 'lesen' | 'hoeren' | 'schreiben' | 'sprechen', value: number) => {
+    const clamped = Math.max(0, Math.min(100, isNaN(value) ? 0 : value));
+    setExamScores(prev => ({ ...prev, [module]: clamped }));
+  };
+
   // Next recommended lesson is the first non-completed lesson, or the first lesson
   const nextLesson = CURRICULUM_LESSONS.find(l => !progress.completedLessonIds.includes(l.id)) || CURRICULUM_LESSONS[0];
 
-  // Calculate Goethe B1 exam total and grade
-  const totalExamScore = Math.round((examScores.lesen + examScores.hoeren + examScores.schreiben + examScores.sprechen) / 4);
-  const getExamGrade = (score: number) => {
-    if (score >= 90) return { label: 'Sehr gut (1.0)', passed: true, color: 'text-[#176B52]' };
-    if (score >= 80) return { label: 'Gut (2.0)', passed: true, color: 'text-[#176B52]' };
-    if (score >= 70) return { label: 'Befriedigend (3.0)', passed: true, color: 'text-[#17243A]' };
-    if (score >= 60) return { label: 'Ausreichend (4.0)', passed: true, color: 'text-[#17243A]' };
-    return { label: 'Nicht bestanden (Failed)', passed: false, color: 'text-[#B91C1C]' };
+  // Current Gender Drill item
+  const currentDrill = GENDER_DRILL_POOL[drillIndex % GENDER_DRILL_POOL.length];
+
+  const handleGenderChoice = (choice: 'der' | 'die' | 'das') => {
+    const isCorrect = choice === currentDrill.article;
+    setDrillAttempts(prev => prev + 1);
+    if (isCorrect) {
+      setDrillScore(prev => prev + 1);
+      audioService.speak(`${currentDrill.article} ${currentDrill.word}`);
+      setGenderFeedback({
+        isCorrect: true,
+        message: `Richtig! "${currentDrill.article} ${currentDrill.word}". ${currentDrill.ruleExplanation}`
+      });
+    } else {
+      audioService.speak(`${currentDrill.article} ${currentDrill.word}`);
+      setGenderFeedback({
+        isCorrect: false,
+        message: `Nicht ganz! Das richtige Wort ist "${currentDrill.article} ${currentDrill.word}". ${currentDrill.ruleExplanation}`
+      });
+    }
   };
-  const examResult = getExamGrade(totalExamScore);
+
+  const handleNextGenderWord = () => {
+    setDrillIndex(prev => prev + 1);
+    setGenderFeedback(null);
+  };
+
+  // Goethe B1 Modular Scoring Calculations (Strict adherence to Goethe-Institut regulations)
+  const PASSING_THRESHOLD = 60;
+  const modules = [
+    { key: 'lesen', name: 'Lesen (Reading)', score: examScores.lesen },
+    { key: 'hoeren', name: 'Hören (Listening)', score: examScores.hoeren },
+    { key: 'schreiben', name: 'Schreiben (Writing)', score: examScores.schreiben },
+    { key: 'sprechen', name: 'Sprechen (Speaking)', score: examScores.sprechen }
+  ];
+
+  const passedModules = modules.filter(m => m.score >= PASSING_THRESHOLD);
+  const failedModules = modules.filter(m => m.score < PASSING_THRESHOLD);
+  const isFullCertificateAwarded = failedModules.length === 0;
+
+  const totalAverageScore = Math.round(
+    (examScores.lesen + examScores.hoeren + examScores.schreiben + examScores.sprechen) / 4
+  );
+
+  const getGoetheGrade = (avg: number) => {
+    if (avg >= 90) return { label: 'Sehr gut (1.0)', color: 'text-[#176B52]' };
+    if (avg >= 80) return { label: 'Gut (2.0)', color: 'text-[#176B52]' };
+    if (avg >= 70) return { label: 'Befriedigend (3.0)', color: 'text-[#17243A]' };
+    if (avg >= 60) return { label: 'Ausreichend (4.0)', color: 'text-[#17243A]' };
+    return { label: 'Nicht bestanden', color: 'text-[#B91C1C]' };
+  };
 
   return (
     <div className="min-h-screen bg-[#F7F8F5] text-[#202B3C] flex flex-col font-sans">
+      {/* Skip to Content for Accessibility */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 z-50 px-4 py-2 bg-[#17243A] text-white rounded-lg text-xs font-semibold shadow-lg"
+      >
+        Skip to main content
+      </a>
+
       {/* Top Header - Strict Top Bar Contract (3 zones separated by gap-8) */}
       <header className="sticky top-0 z-50 bg-[#FFFFFF]/95 backdrop-blur-md border-b border-[#E3E8E3] shadow-[0_1px_3px_rgba(23,36,58,0.03)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
           
-          {/* Zone 1: Single element brand wordmark */}
+          {/* Zone 1: Brand wordmark */}
           <div className="flex items-center gap-2.5 whitespace-nowrap shrink-0">
             <button 
               onClick={() => { setActiveView('curriculum'); setSelectedLesson(null); }}
-              className="flex items-center gap-2.5 text-left focus-visible:ring-2 focus-visible:ring-[#176B52] rounded-lg p-1 -ml-1"
+              className="flex items-center gap-2.5 text-left focus-visible:ring-2 focus-visible:ring-[#176B52] rounded-lg p-1 -ml-1 outline-none"
+              aria-label="German Learner homepage"
             >
               <div className="w-8 h-8 rounded-lg bg-[#17243A] text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-sm">
                 DE
@@ -101,14 +189,14 @@ export const App: React.FC = () => {
                   German Learner
                 </span>
                 <span className="text-[11px] text-[#687386] font-medium block leading-tight">
-                  CEFR A1–A2 Platform
+                  CEFR A1–B1 Platform
                 </span>
               </div>
             </button>
           </div>
 
-          {/* Zone 2: Clean single-line text navigation links */}
-          <nav className="hidden md:flex items-center gap-1 lg:gap-2">
+          {/* Zone 2: Navigation links */}
+          <nav className="hidden md:flex items-center gap-1 lg:gap-2" aria-label="Main navigation">
             <button 
               onClick={() => { setActiveView('curriculum'); setSelectedLesson(null); }}
               className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
@@ -164,7 +252,7 @@ export const App: React.FC = () => {
             </button>
           </nav>
 
-          {/* Zone 3: 1 primary action / metric */}
+          {/* Zone 3: Metric and primary action */}
           <div className="flex items-center gap-3 shrink-0">
             <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-[#17243A] bg-[#FFFFFF] border border-[#E3E8E3] px-3 py-1.5 rounded-lg shadow-sm">
               <Flame className="w-3.5 h-3.5 text-[#E7B66A] fill-[#E7B66A]" />
@@ -176,7 +264,7 @@ export const App: React.FC = () => {
                 onClick={() => handleOpenLesson(nextLesson)}
                 className="hidden lg:inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#176B52] rounded-lg hover:bg-[#125742] transition-colors shadow-sm whitespace-nowrap shrink-0"
               >
-                <span>Continue Unit</span>
+                <span>Continue Unit {nextLesson.order}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
@@ -184,8 +272,9 @@ export const App: React.FC = () => {
             {/* Mobile menu trigger */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-[#687386] hover:text-[#17243A] hover:bg-[#F0F3EF] rounded-lg"
+              className="md:hidden p-2 text-[#687386] hover:text-[#17243A] hover:bg-[#F0F3EF] rounded-lg focus-visible:ring-2 focus-visible:ring-[#176B52]"
               aria-label="Toggle navigation menu"
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -236,7 +325,7 @@ export const App: React.FC = () => {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 md:py-10">
+      <main id="main-content" className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 md:py-10">
         
         {/* VIEW 1: LESSON VIEWER */}
         {activeView === 'lesson' && selectedLesson && (
@@ -263,7 +352,7 @@ export const App: React.FC = () => {
                       <span aria-hidden="true">·</span>
                       <span>Pre-A1 to A2 Foundations</span>
                       <span aria-hidden="true">·</span>
-                      <span>B1 Preparation</span>
+                      <span>B1 Modular Bridge</span>
                     </div>
 
                     <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-bold text-[#17243A] font-serif leading-[1.15] tracking-tight">
@@ -271,7 +360,7 @@ export const App: React.FC = () => {
                     </h1>
 
                     <p className="text-sm sm:text-base text-[#687386] leading-relaxed max-w-xl">
-                      Build your German step by step with practical lessons, useful vocabulary, real-life conversations, and interactive exercises. Master essential greetings, order at cafés, navigate German cities, and conquer the fundamental <strong>Verb in Position 2</strong> rule.
+                      Build your German step by step with practical lessons, useful vocabulary, real-life conversations, and interactive exercises. Master essential greetings, order at cafés, navigate German cities, conquer the fundamental <strong>Verb in Position 2</strong> rule, and advance to complex <strong>weil/dass</strong> subordinate clauses.
                     </p>
                   </div>
 
@@ -280,7 +369,7 @@ export const App: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-3">
                       <button 
                         onClick={() => handleOpenLesson(nextLesson)}
-                        className="px-5 py-2.5 text-sm font-semibold text-white bg-[#176B52] hover:bg-[#125742] rounded-xl shadow-sm transition-all duration-200 flex items-center gap-2"
+                        className="px-5 py-2.5 text-sm font-semibold text-white bg-[#176B52] hover:bg-[#125742] rounded-xl shadow-sm transition-all duration-200 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-[#176B52]"
                       >
                         <span>Start Learning Unit {nextLesson.order}</span>
                         <ArrowRight className="w-4 h-4" />
@@ -288,7 +377,7 @@ export const App: React.FC = () => {
 
                       <button 
                         onClick={() => setActiveView('srs')}
-                        className="px-4 py-2.5 text-sm font-medium text-[#17243A] bg-[#FFFFFF] hover:bg-[#F7F8F5] border border-[#E3E8E3] rounded-xl transition-all duration-200 flex items-center gap-2"
+                        className="px-4 py-2.5 text-sm font-medium text-[#17243A] bg-[#FFFFFF] hover:bg-[#F7F8F5] border border-[#E3E8E3] rounded-xl transition-all duration-200 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-[#17243A]"
                       >
                         <RotateCcw className="w-4 h-4 text-[#687386]" />
                         <span>Review Vocabulary ({dueCards.length} due)</span>
@@ -307,7 +396,7 @@ export const App: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <Layers className="w-4 h-4 text-[#687386]" />
-                        <span><strong>{progress.srsCards.length}</strong> Cards in Deck</span>
+                        <span><strong>{progress.srsCards.length}</strong> Cards in Retention Deck</span>
                       </div>
                     </div>
                   </div>
@@ -327,7 +416,7 @@ export const App: React.FC = () => {
                         Interactive Immersion
                       </span>
                       <p className="text-xs text-white/95 mt-0.5">
-                        Native speech audio, sentence structure drills, and authentic dialogue.
+                        Authentic speech audio, sentence structure drills, and communicative dialogues.
                       </p>
                     </div>
                   </div>
@@ -365,7 +454,7 @@ export const App: React.FC = () => {
                   <h2 className="text-2xl font-bold text-[#17243A] font-serif">Curriculum Progression</h2>
                   <p className="text-xs text-[#687386] mt-0.5">Sequential units structured by communicative capability and CEFR outcomes.</p>
                 </div>
-                <span className="text-xs text-[#687386]">5 Comprehensive Stages</span>
+                <span className="text-xs text-[#687386]">{CURRICULUM_STAGES.length} Structured Stages</span>
               </div>
 
               {CURRICULUM_STAGES.map((stage) => {
@@ -409,7 +498,10 @@ export const App: React.FC = () => {
                           <div 
                             key={lesson.id}
                             onClick={() => handleOpenLesson(lesson)}
-                            className="bg-white border border-[#E3E8E3] hover:border-[#176B52] p-5 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md flex flex-col justify-between group"
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`Lesson ${lesson.order}: ${lesson.title}. Duration: ${lesson.durationMinutes} minutes.`}
+                            className="bg-white border border-[#E3E8E3] hover:border-[#176B52] focus-visible:ring-2 focus-visible:ring-[#176B52] p-5 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md flex flex-col justify-between group outline-none"
                           >
                             <div className="space-y-3">
                               <div className="flex items-center justify-between text-xs">
@@ -471,20 +563,20 @@ export const App: React.FC = () => {
                 </div>
                 <h2 className="text-2xl font-bold text-[#17243A] font-serif mt-1">Vocabulary Retention Deck</h2>
                 <p className="text-xs text-[#687386] mt-0.5">
-                  Powered by the SM-2 spaced repetition algorithm. Cards adapt based on your recall confidence.
+                  Powered by the SM-2 spaced repetition algorithm. Cards dynamically adapt based on your recall confidence.
                 </p>
               </div>
 
               <button 
                 onClick={() => setActiveView('curriculum')}
-                className="text-xs font-semibold text-[#176B52] hover:text-[#125742] underline"
+                className="text-xs font-semibold text-[#176B52] hover:text-[#125742] underline self-start sm:self-auto"
               >
                 Back to Curriculum
               </button>
             </div>
 
             <FlashcardReview 
-              cards={dueCards.length > 0 ? dueCards : progress.srsCards.slice(0, 10)}
+              cards={dueCards.length > 0 ? dueCards : progress.srsCards.slice(0, 15)}
               onFinish={() => setActiveView('curriculum')}
             />
           </div>
@@ -501,7 +593,7 @@ export const App: React.FC = () => {
                 </div>
                 <h2 className="text-2xl font-bold text-[#17243A] font-serif mt-1">Mistakes Notebook</h2>
                 <p className="text-xs text-[#687386] mt-0.5">
-                  Review questions answered incorrectly during practice with complete grammatical explanations.
+                  Review questions answered incorrectly during practice with complete grammatical explanations, or retry them to clear errors.
                 </p>
               </div>
 
@@ -533,7 +625,7 @@ export const App: React.FC = () => {
                 </div>
                 <h3 className="text-lg font-bold text-[#17243A]">No Mistakes Logged Yet!</h3>
                 <p className="text-xs text-[#687386] mt-1 max-w-sm mx-auto">
-                  Practice exercises and tests will log any challenging questions here automatically for review.
+                  Practice exercises and tests will log any challenging questions here automatically for targeted review.
                 </p>
               </div>
             ) : (
@@ -542,9 +634,21 @@ export const App: React.FC = () => {
                   <div key={m.id} className="p-5 rounded-xl bg-white border border-[#E3E8E3] shadow-sm space-y-3">
                     <div className="flex items-center justify-between text-xs text-[#687386]">
                       <span className="font-semibold text-[#17243A]">Exercise Challenge</span>
-                      <span>
-                        {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span>
+                          {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const updated = progressService.removeMistake(m.id);
+                            setProgress(updated);
+                          }}
+                          className="text-[#991B1B] hover:underline text-[11px]"
+                          title="Remove item"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
                     </div>
 
                     <div className="text-sm font-bold text-[#17243A]">
@@ -563,6 +667,58 @@ export const App: React.FC = () => {
                     <div className="p-3 rounded-lg bg-[#F7F8F5] border border-[#ECEFEA] text-xs text-[#202B3C] leading-relaxed">
                       <strong className="text-[#17243A]">Grammar Rule:</strong> {m.explanation}
                     </div>
+
+                    {/* Inline Retry Mechanism */}
+                    {activeMistakePracticeId === m.id ? (
+                      <div className="p-3 rounded-xl bg-[#F0F3EF] border border-[#E3E8E3] space-y-2">
+                        <label className="text-xs font-bold text-[#17243A] block">
+                          Type the correct German answer to clear this mistake:
+                        </label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text" 
+                            value={mistakeUserAnswer}
+                            onChange={(e) => setMistakeUserAnswer(e.target.value)}
+                            placeholder="Type correct answer..."
+                            className="flex-1 p-2 rounded-lg bg-white border border-[#E3E8E3] text-xs font-mono"
+                          />
+                          <button
+                            onClick={() => {
+                              const cleanUser = mistakeUserAnswer.trim().toLowerCase().replace(/[.,!?;:]/g, '');
+                              const cleanTarget = String(m.correctAnswer).trim().toLowerCase().replace(/[.,!?;:]/g, '');
+                              if (cleanUser === cleanTarget) {
+                                const updated = progressService.removeMistake(m.id);
+                                setProgress(updated);
+                                setActiveMistakePracticeId(null);
+                                setMistakeFeedback(null);
+                                setMistakeUserAnswer('');
+                              } else {
+                                setMistakeFeedback('Try again! Compare closely with the correct answer above.');
+                              }
+                            }}
+                            className="px-4 py-2 bg-[#176B52] text-white rounded-lg text-xs font-semibold"
+                          >
+                            Check & Resolve
+                          </button>
+                        </div>
+                        {mistakeFeedback && (
+                          <p className="text-xs text-[#991B1B] font-medium">{mistakeFeedback}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="pt-1 flex justify-end">
+                        <button
+                          onClick={() => {
+                            setActiveMistakePracticeId(m.id);
+                            setMistakeUserAnswer('');
+                            setMistakeFeedback(null);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-[#F0F3EF] hover:bg-[#E2E8E0] text-[#17243A] text-xs font-semibold border border-[#E3E8E3] transition-colors"
+                        >
+                          Retry Question
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -583,13 +739,13 @@ export const App: React.FC = () => {
                   Goethe B1 Practice Simulator & Grammar Sandbox
                 </h2>
                 <p className="text-xs text-[#687386] mt-0.5">
-                  Rapid gender drill, inflection matrix tables, and official Goethe B1 grading band calculations.
+                  Rapid gender drill, inflection matrix tables, and official Goethe B1 modular certificate rules.
                 </p>
               </div>
 
               <button 
                 onClick={() => setActiveView('curriculum')}
-                className="text-xs font-semibold text-[#176B52] hover:text-[#125742] underline"
+                className="text-xs font-semibold text-[#176B52] hover:text-[#125742] underline self-start sm:self-auto"
               >
                 Back to Curriculum
               </button>
@@ -598,75 +754,79 @@ export const App: React.FC = () => {
             {/* Split Grid: Rapid Gender Drill & Case Inflection Matrix */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
-              {/* Rapid Gender Drill */}
+              {/* Dynamic Rapid Gender Drill */}
               <div className="lg:col-span-6 bg-white border border-[#E3E8E3] rounded-2xl p-6 shadow-sm space-y-5">
-                <div>
-                  <span className="text-xs font-semibold text-[#176B52] uppercase tracking-wider block">
-                    Interactive Drill
-                  </span>
-                  <h3 className="text-lg font-bold text-[#17243A] mt-0.5">
-                    Noun Gender Training (der, die, das)
-                  </h3>
-                  <p className="text-xs text-[#687386] mt-1">
-                    German grammatical gender determines article endings in Akkusativ and Dativ. Test your instinct:
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-[#176B52] uppercase tracking-wider block">
+                      Interactive Drill
+                    </span>
+                    <h3 className="text-lg font-bold text-[#17243A] mt-0.5">
+                      Noun Gender Training (der, die, das)
+                    </h3>
+                  </div>
+                  <div className="text-xs font-mono bg-[#E8F3ED] text-[#176B52] px-2.5 py-1 rounded-md font-semibold">
+                    Score: {drillScore} / {drillAttempts}
+                  </div>
                 </div>
 
-                <div className="p-6 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] text-center space-y-1">
+                <p className="text-xs text-[#687386]">
+                  German grammatical gender determines article endings in Akkusativ and Dativ. Test your instinct on common nouns:
+                </p>
+
+                <div className="p-6 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] text-center space-y-1 relative">
                   <span className="text-xs text-[#687386]">Which definite article belongs to:</span>
-                  <h4 className="text-3xl font-extrabold text-[#17243A] font-serif tracking-wide">
-                    Kaffee
-                  </h4>
-                  <span className="text-xs text-[#687386] italic">meaning "coffee"</span>
+                  <div className="flex items-center justify-center gap-2">
+                    <h4 className="text-3xl font-extrabold text-[#17243A] font-serif tracking-wide">
+                      {currentDrill.word}
+                    </h4>
+                    <button
+                      onClick={() => handleSpeak(currentDrill.word)}
+                      className="p-1.5 text-[#687386] hover:text-[#176B52]"
+                      title="Listen"
+                      aria-label={`Listen to ${currentDrill.word}`}
+                    >
+                      <Volume2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <span className="text-xs text-[#687386] italic">meaning "{currentDrill.translation}"</span>
                 </div>
 
-                {/* Inline feedback banner (No alert popup) */}
+                {/* Inline feedback banner */}
                 {genderFeedback && (
-                  <div className={`p-3 rounded-lg text-xs leading-relaxed ${
+                  <div className={`p-3.5 rounded-lg text-xs leading-relaxed space-y-2 ${
                     genderFeedback.isCorrect 
                       ? 'bg-[#E8F3ED] border border-[#C5DDD0] text-[#176B52]' 
                       : 'bg-[#FEF2F2] border border-[#FEE2E2] text-[#991B1B]'
-                  }`}>
-                    {genderFeedback.message}
+                  }`} aria-live="polite">
+                    <div>{genderFeedback.message}</div>
+                    <button
+                      onClick={handleNextGenderWord}
+                      className="px-3 py-1.5 rounded-md bg-white text-[#17243A] border border-[#CCD4CB] font-semibold text-xs shadow-sm hover:bg-[#F7F8F5]"
+                    >
+                      Next Word →
+                    </button>
                   </div>
                 )}
 
                 <div className="grid grid-cols-3 gap-3">
                   <button 
-                    onClick={() => {
-                      handleSpeak('der Kaffee');
-                      setGenderFeedback({
-                        isCorrect: true,
-                        message: 'Richtig! "der Kaffee" is masculine. In Akkusativ: "Ich trinke einen Kaffee."'
-                      });
-                    }}
-                    className="py-3 px-2 rounded-xl bg-[#F0F4FA] hover:bg-[#E2EAF6] border border-[#CCDCEE] text-[#1E40AF] font-bold text-sm transition-all"
+                    onClick={() => handleGenderChoice('der')}
+                    className="py-3 px-2 rounded-xl bg-[#F0F4FA] hover:bg-[#E2EAF6] border border-[#CCDCEE] text-[#1E40AF] font-bold text-sm transition-all focus-visible:ring-2 focus-visible:ring-[#1E40AF]"
                   >
                     DER (Masc)
                   </button>
 
                   <button 
-                    onClick={() => {
-                      handleSpeak('der Kaffee');
-                      setGenderFeedback({
-                        isCorrect: false,
-                        message: 'Falsch! Coffee is masculine in German: "der Kaffee".'
-                      });
-                    }}
-                    className="py-3 px-2 rounded-xl bg-[#FDF2F2] hover:bg-[#FBE4E4] border border-[#F8C8C8] text-[#991B1B] font-bold text-sm transition-all"
+                    onClick={() => handleGenderChoice('die')}
+                    className="py-3 px-2 rounded-xl bg-[#FDF2F2] hover:bg-[#FBE4E4] border border-[#F8C8C8] text-[#991B1B] font-bold text-sm transition-all focus-visible:ring-2 focus-visible:ring-[#991B1B]"
                   >
                     DIE (Fem)
                   </button>
 
                   <button 
-                    onClick={() => {
-                      handleSpeak('der Kaffee');
-                      setGenderFeedback({
-                        isCorrect: false,
-                        message: 'Falsch! Coffee is masculine in German: "der Kaffee".'
-                      });
-                    }}
-                    className="py-3 px-2 rounded-xl bg-[#F0FDF4] hover:bg-[#DCFCE7] border border-[#BBF7D0] text-[#166534] font-bold text-sm transition-all"
+                    onClick={() => handleGenderChoice('das')}
+                    className="py-3 px-2 rounded-xl bg-[#F0FDF4] hover:bg-[#DCFCE7] border border-[#BBF7D0] text-[#166534] font-bold text-sm transition-all focus-visible:ring-2 focus-visible:ring-[#166534]"
                   >
                     DAS (Neut)
                   </button>
@@ -726,112 +886,169 @@ export const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Goethe B1 Exam Simulator & Grade Band Calculator */}
+            {/* Official Goethe B1 Modular Exam Simulator & Grade Band Calculator */}
             <div className="bg-white border border-[#E3E8E3] rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#176B52]">
-                  <Award className="w-4 h-4" />
-                  <span>Official Goethe-Zertifikat B1 Scoring Matrix</span>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#176B52]">
+                    <Award className="w-4 h-4" />
+                    <span>Official Goethe-Zertifikat B1 Scoring Matrix</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-[#17243A] font-serif mt-1">
+                    Goethe-Zertifikat B1 Modular Simulator
+                  </h3>
+                  <p className="text-xs text-[#687386] mt-0.5">
+                    Official regulation: 4 autonomous modules (Lesen, Hören, Schreiben, Sprechen) evaluated out of 100 points each.
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold text-[#17243A] font-serif mt-1">
-                  B1 Modular Exam Score & Certificate Calculator
-                </h3>
-                <p className="text-xs text-[#687386] mt-0.5">
-                  Each module (Lesen, Hören, Schreiben, Sprechen) is scored out of 100 points. A passing score requires $\ge 60$ points in each module.
-                </p>
+
+                {/* Preset Testing Buttons */}
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-[#687386] font-medium">Test Presets:</span>
+                  <button
+                    onClick={() => setExamScores({ lesen: 75, hoeren: 59, schreiben: 75, sprechen: 75 })}
+                    className="px-2.5 py-1 rounded bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA] font-medium transition-colors"
+                    title="Test boundary: 59 in Hören fails the module despite high average"
+                  >
+                    Boundary 59 (Fail)
+                  </button>
+                  <button
+                    onClick={() => setExamScores({ lesen: 60, hoeren: 60, schreiben: 60, sprechen: 60 })}
+                    className="px-2.5 py-1 rounded bg-[#F0F3EF] hover:bg-[#E3E8E3] text-[#17243A] border border-[#CCD4CB] font-medium transition-colors"
+                    title="All exactly 60"
+                  >
+                    Boundary 60 (Pass)
+                  </button>
+                  <button
+                    onClick={() => setExamScores({ lesen: 92, hoeren: 95, schreiben: 90, sprechen: 94 })}
+                    className="px-2.5 py-1 rounded bg-[#E8F3ED] hover:bg-[#D5EADB] text-[#176B52] border border-[#C5DDD0] font-medium transition-colors"
+                  >
+                    Honors (92+)
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              {/* Regulatory Notice Banner */}
+              <div className="p-4 rounded-xl bg-[#F0F4FA] border border-[#BFDBFE] text-xs text-[#1E3A8A] flex items-start gap-3">
+                <Info className="w-5 h-5 text-[#2563EB] shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-[#1E40AF]">
+                    Official Goethe-Institut B1 Modular Rule:
+                  </p>
+                  <p className="text-[#1E3A8A] leading-relaxed">
+                    A candidate passes a module ONLY if they score <strong>≥ 60 points</strong> (60%). A high overall average <strong>cannot compensate</strong> for a failed module. Candidates receive modular certificates for passed sections, and can retake individual failed modules within one year.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 
-                {/* Sliders */}
+                {/* Sliders and Direct Numeric Inputs */}
                 <div className="lg:col-span-7 space-y-5">
-                  <div>
-                    <div className="flex justify-between text-xs font-semibold text-[#17243A] mb-1">
-                      <span>Lesen (Reading Comprehension)</span>
-                      <span className="font-mono text-[#176B52]">{examScores.lesen} / 100</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      value={examScores.lesen}
-                      onChange={(e) => setExamScores({ ...examScores, lesen: Number(e.target.value) })}
-                      className="w-full accent-[#176B52] h-2 bg-[#E3E8E3] rounded-lg cursor-pointer"
-                    />
-                  </div>
+                  {modules.map((m) => {
+                    const isModulePassed = m.score >= PASSING_THRESHOLD;
+                    return (
+                      <div key={m.key} className="p-4 rounded-xl bg-[#F7F8F5] border border-[#E3E8E3] space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-[#17243A]">{m.name}</span>
+                            {isModulePassed ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#E8F3ED] text-[#176B52] border border-[#C5DDD0]">
+                                <Check className="w-3 h-3" /> Bestanden (≥60)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA]">
+                                <AlertCircle className="w-3 h-3" /> Nicht bestanden ({60 - m.score} pkt short)
+                              </span>
+                            )}
+                          </div>
 
-                  <div>
-                    <div className="flex justify-between text-xs font-semibold text-[#17243A] mb-1">
-                      <span>Hören (Listening Comprehension)</span>
-                      <span className="font-mono text-[#176B52]">{examScores.hoeren} / 100</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      value={examScores.hoeren}
-                      onChange={(e) => setExamScores({ ...examScores, hoeren: Number(e.target.value) })}
-                      className="w-full accent-[#176B52] h-2 bg-[#E3E8E3] rounded-lg cursor-pointer"
-                    />
-                  </div>
+                          {/* Direct Numeric Input with Clamping */}
+                          <div className="flex items-center gap-1.5">
+                            <input 
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={m.score}
+                              onChange={(e) => handleScoreChange(m.key as any, parseInt(e.target.value, 10))}
+                              className="w-16 p-1 text-center font-mono text-xs font-bold text-[#17243A] bg-white border border-[#CCD4CB] rounded-md focus:outline-none focus:border-[#176B52]"
+                            />
+                            <span className="font-mono text-[#687386]">/ 100</span>
+                          </div>
+                        </div>
 
-                  <div>
-                    <div className="flex justify-between text-xs font-semibold text-[#17243A] mb-1">
-                      <span>Schreiben (Written Expression)</span>
-                      <span className="font-mono text-[#176B52]">{examScores.schreiben} / 100</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      value={examScores.schreiben}
-                      onChange={(e) => setExamScores({ ...examScores, schreiben: Number(e.target.value) })}
-                      className="w-full accent-[#176B52] h-2 bg-[#E3E8E3] rounded-lg cursor-pointer"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs font-semibold text-[#17243A] mb-1">
-                      <span>Sprechen (Oral Expression & Partner Dialogue)</span>
-                      <span className="font-mono text-[#176B52]">{examScores.sprechen} / 100</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      value={examScores.sprechen}
-                      onChange={(e) => setExamScores({ ...examScores, sprechen: Number(e.target.value) })}
-                      className="w-full accent-[#176B52] h-2 bg-[#E3E8E3] rounded-lg cursor-pointer"
-                    />
-                  </div>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="100" 
+                          value={m.score}
+                          onChange={(e) => handleScoreChange(m.key as any, Number(e.target.value))}
+                          className="w-full accent-[#176B52] h-2 bg-[#E3E8E3] rounded-lg cursor-pointer"
+                          aria-label={`Score slider for ${m.name}`}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* Live Certificate Card */}
-                <div className="lg:col-span-5 bg-[#F7F8F5] border border-[#E3E8E3] rounded-xl p-6 text-center space-y-3 shadow-inner">
+                {/* Certificate Assessment Card */}
+                <div className="lg:col-span-5 bg-[#F7F8F5] border border-[#E3E8E3] rounded-xl p-6 text-center space-y-4 shadow-inner">
                   <span className="text-[11px] font-semibold text-[#687386] uppercase tracking-wider block">
-                    Calculated Overall Result
+                    Goethe-Zertifikat B1 Assessment
                   </span>
                   
-                  <div className="text-4xl font-extrabold text-[#17243A] font-serif">
-                    {totalExamScore} <span className="text-xl font-sans text-[#687386]">/ 100</span>
+                  {/* Status Banner */}
+                  {isFullCertificateAwarded ? (
+                    <div className="p-4 rounded-xl bg-[#E8F3ED] border border-[#C5DDD0] space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-white text-[#176B52] flex items-center justify-center mx-auto shadow-sm">
+                        <Award className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-lg font-bold text-[#176B52] font-serif">
+                        Gesamtzertifikat B1 Erteilt
+                      </h4>
+                      <p className="text-xs text-[#176B52]">
+                        All 4 autonomous modules passed successfully (≥ 60 points each).
+                      </p>
+                      <div className="pt-2 text-2xl font-extrabold text-[#17243A]">
+                        {totalAverageScore} <span className="text-sm font-normal text-[#687386]">/ 100 Schnitt</span>
+                      </div>
+                      <div className={`text-sm font-bold ${getGoetheGrade(totalAverageScore).color}`}>
+                        Gesamtnote: {getGoetheGrade(totalAverageScore).label}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl bg-[#FEF2F2] border border-[#FECACA] space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-white text-[#991B1B] flex items-center justify-center mx-auto shadow-sm">
+                        <AlertCircle className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-lg font-bold text-[#991B1B] font-serif">
+                        Teilzertifikat (Modulbescheinigung)
+                      </h4>
+                      <p className="text-xs text-[#991B1B] leading-relaxed">
+                        {passedModules.length} of 4 modules passed. Full certificate cannot be issued because <strong>{failedModules.map(f => f.name.split(' ')[0]).join(', ')}</strong> scored below 60 points.
+                      </p>
+                      <div className="text-xs text-[#7F1D1D] bg-white p-2.5 rounded-lg border border-[#FCA5A5] text-left mt-2">
+                        <strong>Action Needed:</strong> Retake {failedModules.map(f => f.name.split(' ')[0]).join(', ')} within 1 year to complete the full certificate.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Modular Summary Breakdown */}
+                  <div className="text-left text-xs space-y-1.5 pt-2 border-t border-[#E3E8E3]">
+                    <span className="font-semibold text-[#17243A] block">Module Status:</span>
+                    {modules.map(m => (
+                      <div key={m.key} className="flex justify-between items-center text-[#687386]">
+                        <span>{m.name.split(' ')[0]}</span>
+                        <span className={`font-mono font-bold ${m.score >= 60 ? 'text-[#176B52]' : 'text-[#991B1B]'}`}>
+                          {m.score} pts ({m.score >= 60 ? 'Pass' : 'Retake'})
+                        </span>
+                      </div>
+                    ))}
                   </div>
 
-                  <div className={`text-base font-bold ${examResult.color}`}>
-                    {examResult.label}
-                  </div>
-
-                  <p className="text-xs text-[#687386] leading-relaxed pt-2 border-t border-[#E3E8E3]">
-                    {examResult.passed 
-                      ? 'Congratulations! This score qualifies for the Goethe-Zertifikat B1 examination standard.'
-                      : 'More practice needed: A minimum score of 60 in all four modules is required to pass Goethe B1.'}
+                  <p className="text-[11px] text-[#8E9BAE] italic leading-relaxed pt-1">
+                    * This is an educational estimation tool based on official Goethe B1 exam regulations. It does not replace an official examination taken at a certified test center.
                   </p>
-
-                  <button
-                    onClick={() => setActiveView('curriculum')}
-                    className="w-full mt-2 py-2 px-4 rounded-lg bg-[#17243A] hover:bg-[#0F1726] text-white text-xs font-semibold transition-colors"
-                  >
-                    Practice Core Curriculum
-                  </button>
                 </div>
 
               </div>
@@ -848,15 +1065,15 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="font-bold text-[#17243A]">German Learner</span>
             <span>·</span>
-            <span>CEFR-Aligned Practical Language Platform</span>
+            <span>CEFR A1–B1 Practical Language Platform</span>
           </div>
 
           <div className="flex items-center gap-4 text-[#687386]">
             <span>Spaced Repetition SM-2</span>
             <span>·</span>
-            <span>Goethe & telc B1 Standard</span>
+            <span>Goethe B1 Modular Rules</span>
             <span>·</span>
-            <span>Web Speech Pronunciation</span>
+            <span>Web Speech API (de-DE)</span>
           </div>
         </div>
       </footer>

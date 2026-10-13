@@ -1,4 +1,4 @@
-import { UserProgressState, Flashcard } from '../types/curriculum';
+import { UserProgressState } from '../types/curriculum';
 
 const STORAGE_KEY = 'german_learner_progress_v2';
 
@@ -29,7 +29,7 @@ export const progressService = {
         if (parsed.lastStudyDate === yesterday) {
           // consecutive day! Streak continues if completed tasks
         } else {
-          // missed day
+          // missed day: preserve positive streak if completed daily goals, otherwise reset to 1
           if (parsed.streakDays > 1 && parsed.dailyCompletedToday < parsed.dailyGoal) {
             parsed.streakDays = 1;
           }
@@ -37,6 +37,12 @@ export const progressService = {
         parsed.dailyCompletedToday = 0;
         parsed.lastStudyDate = today;
       }
+
+      // Ensure fields exist if loaded from older version
+      if (!parsed.mistakesNotebook) parsed.mistakesNotebook = [];
+      if (!parsed.lessonScores) parsed.lessonScores = {};
+      if (!parsed.completedLessonIds) parsed.completedLessonIds = [];
+      if (typeof parsed.voiceSpeed !== 'number') parsed.voiceSpeed = 0.9;
 
       return parsed;
     } catch (e) {
@@ -52,6 +58,17 @@ export const progressService = {
     } catch (e) {
       console.warn('Failed to save progress to storage:', e);
     }
+  },
+
+  reset(): UserProgressState {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {
+        console.warn('Failed to clear storage:', e);
+      }
+    }
+    return { ...defaultState };
   },
 
   completeLesson(lessonId: string, score: number) {
@@ -71,7 +88,7 @@ export const progressService = {
   recordMistake(lessonId: string, prompt: string, userAnswer: string, correctAnswer: string, explanation: string) {
     const current = this.load();
     current.mistakesNotebook.unshift({
-      id: `mistake-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: `mistake-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       lessonId,
       prompt,
       userAnswer,
@@ -84,6 +101,13 @@ export const progressService = {
       current.mistakesNotebook = current.mistakesNotebook.slice(0, 50);
     }
     this.save(current);
+  },
+
+  removeMistake(id: string) {
+    const current = this.load();
+    current.mistakesNotebook = current.mistakesNotebook.filter(m => m.id !== id);
+    this.save(current);
+    return current;
   },
 
   // SM-2 Spaced Repetition calculation
@@ -108,7 +132,7 @@ export const progressService = {
       card.interval = 1;
     }
 
-    // Adjust ease factor
+    // Adjust ease factor according to SM-2 formula
     card.easeFactor = Math.max(1.3, card.easeFactor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
     card.dueDate = Date.now() + card.interval * 86400000;
     card.lastReviewed = Date.now();

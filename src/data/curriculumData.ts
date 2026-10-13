@@ -40,6 +40,14 @@ export const CURRICULUM_STAGES: Stage[] = [
     description: 'Ask for directions, understand public transit schedules, and schedule appointments politely.',
     badge: 'Independent City Life',
     lessonIds: ['lesson-4-1']
+  },
+  {
+    id: 'stage-5',
+    level: 'B1',
+    title: 'Stage 5: B1 Foundation: Giving Reasons & Opinions',
+    description: 'Construct complex sentences with "weil" and "dass", express viewpoints, and master the subordinate verb-at-the-end rule.',
+    badge: 'Complex Sentences & B1 Bridge',
+    lessonIds: ['lesson-5-1']
   }
 ];
 
@@ -733,6 +741,159 @@ export const CURRICULUM_LESSONS: Lesson[] = [
       'Ask "Entschuldigung, wo ist [Ort]?" to ask for directions politely.',
       'Key directions: geradeaus (straight), nach links (left), nach rechts (right).',
       'For public transport: die Fahrkarte (ticket), der Bahnhof (station), das Gleis (platform).'
+    ]
+  },
+  // LESSON 5.1 (B1 Bridge)
+  {
+    id: 'lesson-5-1',
+    stageId: 'stage-5',
+    level: 'B1.1',
+    order: 6,
+    title: 'Giving Reasons & Opinions (weil & dass)',
+    subtitle: 'Learn how German subordinate clauses move the conjugated verb to the very end.',
+    durationMinutes: 18,
+    objective: 'By the end of this lesson, you can express opinions ("Ich denke, dass...") and give reasons ("Ich lerne Deutsch, weil...") using correct subordinate clause word order.',
+    essentialVocabulary: [
+      {
+        id: 'v-5-1',
+        german: 'weil',
+        english: 'because (subordinating conjunction)',
+        phonetic: 'vyle',
+        exampleDe: 'Ich bleibe zu Hause, weil ich krank bin.',
+        exampleEn: 'I stay at home because I am sick.',
+        notes: 'Kicks the conjugated verb to the very end of the subclause!'
+      },
+      {
+        id: 'v-5-2',
+        german: 'dass',
+        english: 'that (subordinating conjunction)',
+        phonetic: 'dahs',
+        exampleDe: 'Ich glaube, dass er morgen kommt.',
+        exampleEn: 'I believe that he is coming tomorrow.',
+        notes: 'Spelled with double "ss" (subordinating conjunction)'
+      },
+      {
+        id: 'v-5-3',
+        german: 'die Meinung',
+        english: 'opinion / view',
+        gender: 'die',
+        plural: 'die Meinungen',
+        phonetic: 'dee my-noong',
+        exampleDe: 'Meiner Meinung nach ist das wichtig.',
+        exampleEn: 'In my opinion, that is important.'
+      },
+      {
+        id: 'v-5-4',
+        german: 'glauben',
+        english: 'to believe / think',
+        phonetic: 'glow-ben',
+        exampleDe: 'Ich glaube, dass Deutsch logisch ist.',
+        exampleEn: 'I believe that German is logical.'
+      },
+      {
+        id: 'v-5-5',
+        german: 'wichtig',
+        english: 'important',
+        phonetic: 'vish-tish',
+        exampleDe: 'Pünktlichkeit ist in Deutschland sehr wichtig.',
+        exampleEn: 'Punctuality is very important in Germany.'
+      },
+      {
+        id: 'v-5-6',
+        german: 'die Arbeit',
+        english: 'work / employment',
+        gender: 'die',
+        phonetic: 'dee ahr-byte',
+        exampleDe: 'Ich brauche Deutsch für meine Arbeit.',
+        exampleEn: 'I need German for my work.'
+      }
+    ],
+    grammarInContext: {
+      title: 'Subordinate Clauses with "weil" and "dass": Verb at the End!',
+      explanation: 'Unlike main clauses where the verb is strictly in Position 2, subordinate conjunctions like "weil" (because) and "dass" (that) send the conjugated verb all the way to the end of the clause.',
+      examples: [
+        { de: 'Ich lerne Deutsch. Deutsch ist wichtig. -> Ich lerne Deutsch, weil Deutsch wichtig ist.', en: 'I learn German because German is important. (ist goes to end!)', highlight: 'ist' },
+        { de: 'Ich denke, dass Berlin eine tolle Stadt ist.', en: 'I think that Berlin is a great city. (ist at the end)', highlight: 'ist' },
+        { de: 'Er kommt nicht, weil er heute viel arbeiten muss.', en: 'He is not coming because he has to work a lot today. (modal verb muss at the end!)', highlight: 'muss' }
+      ],
+      commonMistake: {
+        wrong: 'Ich lerne Deutsch, weil ich möchte in Berlin wohnen.',
+        right: 'Ich lerne Deutsch, weil ich in Berlin wohnen möchte.',
+        reason: 'In a "weil"-clause, the conjugated verb ("möchte") must be the very last word of the clause!'
+      }
+    },
+    dialogue: {
+      title: 'Discussing Language Goals at the Goethe-Institut',
+      context: 'Max and Sophia talk during coffee break about why they are studying German for the B1 exam.',
+      lines: [
+        { speaker: 'Max', role: 'Student', de: 'Hallo Sophia! Warum lernst du eigentlich Deutsch?', en: 'Hello Sophia! Why are you actually learning German?' },
+        { speaker: 'Sophia', role: 'Student', de: 'Ich lerne Deutsch, weil ich an einer deutschen Universität studieren möchte.', en: 'I am learning German because I want to study at a German university.' },
+        { speaker: 'Max', role: 'Student', de: 'Das ist ein tolles Ziel! Findest du die Grammatik schwer?', en: 'That is a great goal! Do you find the grammar difficult?' },
+        { speaker: 'Sophia', role: 'Student', de: 'Manchmal schon, aber ich glaube, dass man mit täglicher Übung schnell Fortschritte macht.', en: 'Sometimes yes, but I believe that with daily practice one makes quick progress.' },
+        { speaker: 'Max', role: 'Student', de: 'Da hast du völlig recht! Bereitest du dich auch auf die B1-Prüfung vor?', en: 'You are completely right! Are you also preparing for the B1 exam?' },
+        { speaker: 'Sophia', role: 'Student', de: 'Ja, genau. Ich hoffe, dass ich alle vier Module beim ersten Versuch bestehe.', en: 'Yes, exactly. I hope that I pass all four modules on the first attempt.' }
+      ],
+      comprehensionQuestion: {
+        question: 'Why is Sophia learning German?',
+        options: [
+          'Because she wants to study at a German university',
+          'Because she wants to go on vacation to Spain',
+          'Because her teacher forced her',
+          'Because she only needs it for shopping'
+        ],
+        correctIndex: 0,
+        explanation: 'Sophia explains: "weil ich an einer deutschen Universität studieren möchte" (because I want to study at a German university).'
+      }
+    },
+    exercises: [
+      {
+        id: 'ex-5-1',
+        type: 'multiple_choice',
+        prompt: 'Which sentence has the correct verb position for a "weil" clause?',
+        options: [
+          'Ich trinke Tee, weil ich bin müde.',
+          'Ich trinke Tee, weil ich müde bin.',
+          'Ich trinke Tee, weil bin ich müde.',
+          'Ich trinke Tee, bin weil ich müde.'
+        ],
+        correctAnswer: 1,
+        explanation: 'In subordinate clauses introduced by "weil", the conjugated verb ("bin") must be placed at the very end.'
+      },
+      {
+        id: 'ex-5-2',
+        type: 'word_scramble',
+        prompt: 'Form the sentence: "I think that German is interesting."',
+        options: ['Deutsch', 'Ich', 'ist', 'dass', 'denke,', 'interessant'],
+        correctAnswer: 'Ich denke, dass Deutsch interessant ist',
+        acceptableAnswers: ['Ich denke, dass Deutsch interessant ist', 'Ich denke dass Deutsch interessant ist'],
+        explanation: '"dass" introduces a subordinate clause, placing the verb "ist" at the end.'
+      },
+      {
+        id: 'ex-5-3',
+        type: 'listening_choice',
+        prompt: 'Listen to the speaker give a reason:',
+        audioText: 'Ich bleibe heute zu Hause, weil es regnet.',
+        options: [
+          'I am going outside because it is sunny.',
+          'I am staying at home today because it is raining.',
+          'I am going to work because it is cold.',
+          'I am staying at home because I am hungry.'
+        ],
+        correctAnswer: 1,
+        explanation: '"weil es regnet" = because it is raining; "zu Hause bleiben" = to stay at home.'
+      }
+    ],
+    realLifeMission: {
+      scenario: 'You are at a Goethe B1 speaking exam (Sprechen Teil 1).',
+      task: 'State why you are learning German using a complete sentence with "weil".',
+      modelAnswer: 'Ich lerne Deutsch, weil ich in Deutschland leben und arbeiten möchte.',
+      hints: ['Start with "Ich lerne Deutsch, weil..."', 'Place the conjugated verb at the very end ("möchte")'],
+      keyPhrases: ['Ich lerne Deutsch, weil...', 'leben und arbeiten möchte']
+    },
+    summaryTakeaways: [
+      'Conjunctions "weil" (because) and "dass" (that) trigger subordinate clause word order.',
+      'In a subordinate clause, the conjugated verb ALWAYS moves to the end of the clause.',
+      'Express your opinion in B1 discussions with: "Ich denke, dass..." or "Meiner Meinung nach...".'
     ]
   }
 ];
